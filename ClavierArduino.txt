@@ -1,0 +1,70 @@
+#include <Keypad.h>
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
+
+// Déclaration de l'écran LCD I2C (adresse 0x27 souvent utilisée)
+LiquidCrystal_I2C lcd(0x27, 16, 2); // écran 16 colonnes x 2 lignes
+
+const byte ROWS = 4;
+const byte COLS = 3;
+char keys[ROWS][COLS] = {
+  {'1','2','3'},
+  {'4','5','6'},
+  {'7','8','9'},
+  {'*','0','#'}
+};
+byte rowPins[ROWS] = {8, 7, 6, 5};
+byte colPins[COLS] = {4, 3, 2};
+
+Keypad keypad = Keypad(makeKeymap(keys), rowPins, colPins, ROWS, COLS);
+
+// Code secret à valider
+String codeSecret = "2003";
+String codeSaisi = "";
+
+void setup() {
+  Serial.begin(9600);
+  lcd.init(); // Initialiser l'écran LCD
+  lcd.backlight(); // Allumer le rétroéclairage
+  lcd.setCursor(0, 0);
+  lcd.print("Saisir le code:");
+  lcd.setCursor(0, 1);
+}
+
+void loop() {
+  char key = keypad.getKey();
+  
+  if (key) {
+    Serial.println(key);
+
+    if (key == '#') { // Touche # pour valider
+      if (codeSaisi == codeSecret) {
+        lcd.clear();
+        lcd.setCursor(0, 0);
+        lcd.print("Code correct");
+      } else {
+        lcd.clear();
+        lcd.setCursor(0, 0);
+        lcd.print("Code incorrect");
+      }
+      delay(2000); // Attente 2 sec
+      codeSaisi = "";
+      lcd.clear();
+      lcd.setCursor(0, 0);
+      lcd.print("Saisir le code:");
+      lcd.setCursor(0, 1);
+    }
+    else if (key == '*') { // Touche * pour effacer
+      codeSaisi = "";
+      lcd.setCursor(0, 1);
+      lcd.print("                "); // effacer ligne
+      lcd.setCursor(0, 1);
+    }
+    else {
+      if (codeSaisi.length() < 16) { // ne pas dépasser l'affichage
+        codeSaisi += key;
+        lcd.print("*"); // Afficher * au lieu du chiffre pour masquer
+      }
+    }
+  }
+}

@@ -1,0 +1,119 @@
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
+#include <Keypad.h>
+
+const int relayPin = 13;
+LiquidCrystal_I2C lcd(0x27, 16, 2);
+
+const byte ROW_NUM = 4;
+const byte COLUMN_NUM = 3;
+char keys[ROW_NUM][COLUMN_NUM] = {
+  {'1','2','3'},
+  {'4','5','6'},
+  {'7','8','9'},
+  {'*','0','#'}
+};
+byte pin_rows[ROW_NUM] = {8, 7, 6, 5};
+byte pin_column[COLUMN_NUM] = {4, 3, 2};
+
+Keypad keypad = Keypad(makeKeymap(keys), pin_rows, pin_column, ROW_NUM, COLUMN_NUM);
+
+unsigned long lastValidTime = 0;
+const unsigned long delayBeforeOff = 3000;
+bool isAuthorized = false;
+String nomUtilisateur = ""; // ➕ Nom du détenteur (visage/QR)
+
+void setup() {
+  Serial.begin(9600);
+  pinMode(relayPin, OUTPUT);
+  digitalWrite(relayPin, LOW);
+
+  lcd.init();
+  lcd.backlight();
+  lcd.setCursor(0, 0);
+  lcd.print("Systeme Pret");
+}
+
+void loop() {
+  if (Serial.available()) {
+    String message = Serial.readStringUntil('\n');
+    message.trim();
+    lcd.clear();
+
+    if (message.startsWith("QR:")) {
+      nomUtilisateur = message.substring(3);
+      lcd.setCursor(0, 0);
+      lcd.print("Bonjour,");
+      lcd.setCursor(0, 1);
+      lcd.print(nomUtilisateur);
+      isAuthorized = true;
+      lastValidTime = millis();
+      delay(2000);
+      lcd.clear();
+      lcd.setCursor(0, 0);
+      lcd.print("Appuyez sur *");
+      lcd.setCursor(0, 1);
+      lcd.print("pour ouvrir");
+
+    } else if (message == "Inconnu") {
+      lcd.setCursor(0, 0);
+      lcd.print("Visage inconnu");
+      lcd.setCursor(0, 1);
+      lcd.print("Scannez QR code");
+      isAuthorized = false;
+
+    } else if (message == "NO_FACE") {
+      lcd.setCursor(0, 0);
+      lcd.print("Systeme Pret");
+      isAuthorized = false;
+
+    } else if (message == "QR_INVALIDE") {
+      lcd.setCursor(0, 0);
+      lcd.print("Acces interdit");
+      isAuthorized = false;
+
+    } else {
+      nomUtilisateur = message;
+      lcd.setCursor(0, 0);
+      lcd.print("Bonjour,");
+      lcd.setCursor(0, 1);
+      lcd.print(nomUtilisateur);
+      isAuthorized = true;
+      lastValidTime = millis();
+      delay(2000);
+      lcd.clear();
+      lcd.setCursor(0, 0);
+      lcd.print("Appuyez sur *");
+      lcd.setCursor(0, 1);
+      lcd.print("pour ouvrir");
+    }
+  }
+
+  if (isAuthorized) {
+    char key = keypad.getKey();
+    if (key == '*') {
+      digitalWrite(relayPin, HIGH);
+      lcd.clear();
+      lcd.setCursor(0, 0);
+      lcd.print("Porte ouverte");
+      delay(1500);
+      lcd.setCursor(0, 1);
+      lcd.print("Bienvenue ");
+      lcd.print(nomUtilisateur); // ➕ Affiche le nom
+      delay(3000);
+      digitalWrite(relayPin, LOW);
+      isAuthorized = false;
+      lcd.clear();
+      lcd.setCursor(0, 0);
+      lcd.print("Systeme Pret");
+    }
+  }
+
+  if (isAuthorized && (millis() - lastValidTime > delayBeforeOff)) {
+    digitalWrite(relayPin, LOW);
+    isAuthorized = false;
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("Systeme Pret");
+  }
+}

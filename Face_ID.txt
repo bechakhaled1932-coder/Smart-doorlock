@@ -1,0 +1,44 @@
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
+
+LiquidCrystal_I2C lcd(0x27, 16, 2);  // Adresse I2C (0x27), 16 colonnes, 2 lignes
+
+String lastMessage = "";
+
+void setup() {
+  Serial.begin(9600);
+  lcd.init();
+  lcd.backlight();
+  lcd.setCursor(0, 0);
+  lcd.print("Systeme pret...");
+}
+
+void loop() {
+  if (Serial.available()) {
+    String message = Serial.readStringUntil('\n');
+    message.trim();  // Supprimer les espaces/sauts de ligne
+
+    if (message != lastMessage && message.length() > 0) {
+      lcd.clear();
+
+      if (message == "Inconnu") {
+        lcd.setCursor(0, 0);
+        lcd.print("Acces refuse");
+        lcd.setCursor(0, 1);
+        lcd.print("Personne inconnue");
+      } else if (message == "NO_FACE") {
+        lcd.setCursor(0, 0);
+        lcd.print("Aucun visage");
+        lcd.setCursor(0, 1);
+        lcd.print("detecte");
+      } else {
+        lcd.setCursor(0, 0);
+        lcd.print("Bienvenue");
+        lcd.setCursor(0, 1);
+        lcd.print(message);  // Affiche le nom reconnu
+      }
+
+      lastMessage = message;  // Met à jour le dernier message
+    }
+  }
+}

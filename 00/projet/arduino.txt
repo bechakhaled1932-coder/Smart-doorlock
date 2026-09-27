@@ -1,0 +1,164 @@
+#include <Keypad.h>
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
+
+// === LCD ===
+LiquidCrystal_I2C lcd(0x27, 16, 2); // Adresse I2C de l'écran LCD
+
+// === Clavier matriciel 4x3 ===
+const byte ROWS = 4;
+const byte COLS = 3;
+char keys[ROWS][COLS] = {
+  {'1', '2', '3'},
+  {'4', '5', '6'},
+  {'7', '8', '9'},
+  {'*', '0', '#'}
+};
+byte rowPins[ROWS] = {8,7,6,5};
+byte colPins[COLS] = {4,3,2};
+Keypad keypad = Keypad(makeKeymap(keys), rowPins, colPins, ROWS, COLS);
+
+// === Relais ===
+const int relaisPin = 13;
+
+String currentMode = "";
+String codeSaisi = "";
+bool attenteDetection = false;
+unsigned long derniereInteraction = 0;
+const unsigned long timeoutInactif = 20000; // 20 secondes d'inactivité
+
+void setup() {
+  Serial.begin(9600);
+  pinMode(relaisPin, OUTPUT);
+  digitalWrite(relaisPin, LOW);
+  lcd.init();
+  lcd.backlight();
+  afficherMenu();
+}
+
+void loop() {
+  // Timeout pour retour au menu
+  if (currentMode != "" && millis() - derniereInteraction > timeoutInactif) {
+    resetSystem();
+  }
+
+  // Lecture du port série
+  if (Serial.available()) {
+    String message = Serial.readStringUntil('\n');
+    message.trim();
+    traiterMessage(message);
+  }
+
+  // Lecture du clavier
+  char key = keypad.getKey();
+  if (key) {
+    derniereInteraction = millis();
+
+    if (currentMode == "") {
+      if (key == '1' || key == '2' || key == '3') {
+        currentMode = key;
+        lcd.clear();
+        lcd.setCursor(0, 0);
+        if (key == '1') lcd.print("Mode: FaceID");
+        if (key == '2') lcd.print("Mode: QR");
+        if (key == '3') {
+          lcd.print("Mode: Clavier");
+          lcd.setCursor(0, 1);
+          lcd.print("Entrez code:");
+          delay(1000);
+          lcd.clear();
+          lcd.setCursor(0, 0);
+          lcd.print("Entrez code:");
+        }
+
+        if (key == '1' || key == '2') {
+          lcd.setCursor(0, 1);
+          lcd.print("* pour demarrer");
+        }
+
+        Serial.println("MODE:" + String(key));
+      }
+
+    } else {
+      if ((currentMode == "1" || currentMode == "2") && key == '*') {
+        attenteDetection = true;
+        Serial.println("DETECTION:START");
+        lcd.setCursor(0, 1);
+        lcd.print("Detection...");
+      }
+
+      if (currentMode == "3") {
+        if (key == '#') {
+          if (codeSaisi.length() > 0) {
+            Serial.println("CODE:" + codeSaisi);
+            lcd.clear();
+            lcd.setCursor(0, 0);
+            lcd.print("Code envoye");
+            delay(1000);
+            lcd.clear();
+            lcd.setCursor(0, 0);
+            lcd.print("Entrez code:");
+            codeSaisi = "";
+          }
+        } else if (key == '*') {
+          codeSaisi = "";
+          lcd.setCursor(0, 1);
+          lcd.print("                "); // efface la ligne 1
+          lcd.setCursor(0, 0);
+          lcd.print("Code efface");
+          delay(1000);
+          lcd.clear();
+          lcd.setCursor(0, 0);
+          lcd.print("Entrez code:");
+        } else if (codeSaisi.length() < 10) {
+          codeSaisi += key;
+
+          // Efface la ligne 1 avant d'afficher la saisie
+          lcd.setCursor(0, 1);
+          lcd.print("                ");
+          lcd.setCursor(0, 1);
+          lcd.print(codeSaisi);
+        }
+      }
+    }
+  }
+}
+
+void traiterMessage(String msg) {
+  if (msg.startsWith("WELCOME:")) {
+    String nom = msg.substring(8);
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("Bienvenue:");
+    lcd.setCursor(0, 1);
+    lcd.print(nom);
+  }
+  else if (msg == "ACCESS_DENIED") {
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("Acces refuse !");
+  }
+  else if (msg == "RELAIS_ON") {
+    digitalWrite(relaisPin, HIGH);
+  }
+  else if (msg == "RELAIS_OFF") {
+    digitalWrite(relaisPin, LOW);
+    delay(1000);
+    resetSystem();
+  }
+}
+
+void afficherMenu() {
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("1:FaceID 2:QR");
+  lcd.setCursor(0, 1);
+  lcd.print("3:Code Clavier");
+}
+
+void resetSystem() {
+  currentMode = "";
+  codeSaisi = "";
+  attenteDetection = false;
+  afficherMenu();
+}

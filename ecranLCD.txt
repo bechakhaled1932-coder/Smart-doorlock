@@ -1,0 +1,58 @@
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
+
+LiquidCrystal_I2C lcd(0x27, 16, 2);  // Adresse I2C (souvent 0x27)
+
+bool messageAffiche = false;  // Variable pour vérifier si un message a déjà été affiché
+
+void setup() {
+  Serial.begin(9600);
+  lcd.init();
+  lcd.backlight();
+  lcd.setCursor(0, 0);
+  lcd.print("Scanner un QR...");
+}
+
+void loop() {
+  if (Serial.available()) {
+    String message = Serial.readStringUntil('\n');  // Lire jusqu'à un saut de ligne
+    message.trim(); // Nettoie les espaces et sauts de ligne
+
+    // Afficher le message dans le moniteur série pour le débogage
+    Serial.print("Message reçu : ");
+    Serial.println(message);
+
+    if (message.startsWith("QR:") && !messageAffiche) {  // Vérifie si le message n'a pas encore été affiché
+      String name = message.substring(3);  // Récupère le contenu QR
+      lcd.clear();
+      lcd.setCursor(0, 0);
+      lcd.print("Bienvenue");
+      lcd.setCursor(0, 1);
+      lcd.print(name);
+      messageAffiche = true;  // Marque que le message a été affiché
+
+      delay(5000);  // Affiche 5 secondes
+      lcd.clear();
+      lcd.setCursor(0, 0);
+      lcd.print("Scanner un QR...");
+      messageAffiche = false;  // Réautorise l'affichage
+    }
+    else if (message == "INVALID") {
+      lcd.clear();
+      lcd.setCursor(0, 0);
+      lcd.print("Acces refuse");
+      lcd.setCursor(0, 1);
+      lcd.print("Code incorrect");
+      delay(2000);  // Affiche 2 secondes
+      lcd.clear();
+      lcd.setCursor(0, 0);
+      lcd.print("Scanner un QR...");
+    }
+    else if (message == "RESET") {
+      lcd.clear();
+      lcd.setCursor(0, 0);
+      lcd.print("Scanner un QR...");
+      messageAffiche = false;
+    }
+  }
+}
